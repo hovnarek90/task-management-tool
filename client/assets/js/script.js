@@ -1,32 +1,12 @@
 const API_BASE = "http://localhost:5000/api";
+const API_BASE_URL = 'http://localhost:5000/api/tasks/';
 const tokenKey = "authToken";
 
 function showDashboard() {
   document.getElementById("auth").style.display = "none";
   document.getElementById("dashboard").style.display = "block";
-  fetchTasks();
-  roleCheck();
-}
-
-async function fetchTasks() {
-  const token = localStorage.getItem(tokenKey);
-  if (!token) {
-    alert("Please log in to view tasks.");
-    return;
-  }
-
-  try {
-    const response = await fetch(`${API_BASE}/tasks/my-tasks`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!response.ok) throw new Error("Failed to fetch tasks.");
-
-    const tasks = await response.json();
-    renderTasks(tasks);
-  } catch (err) {
-    console.error("Error fetching tasks:", err);
-  }
+  // fetchTasks();
+  // roleCheck();
 }
 
 function roleCheck() {
@@ -57,47 +37,80 @@ function roleCheck() {
   }
 }
 
+async function fetchAndRenderTasks() {
+  try {
+      const response = await fetch(API_BASE_URL + "/my-tasks", {
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }, // If auth is required
+      });
+      if (!response.ok) throw new Error('Failed to fetch tasks');
+
+      const tasks = await response.json();
+      renderTasks(tasks);
+  } catch (error) {
+      console.error(error.message);
+      document.getElementById('tasks').innerHTML = '<p>Error loading tasks</p>';
+  }
+}
+
 function renderTasks(tasks) {
-  const taskList = document.getElementById("tasks");
-  taskList.innerHTML = tasks
-    .map(
-      (task) =>
-        `<div>
-                <h3>${task.title}</h3>
-                <p>${task.description}</p>
-                <p>Priority: ${task.priority}</p>
-                <p>Status: ${task.status}</p>
-            </div>`
-    )
-    .join("");
+  const tasksContainer = document.getElementById('tasks');
+  tasksContainer.innerHTML = tasks
+      .map(
+          (task) => `
+      <div class="task" id="task-${task._id}">
+          <h3>${task.title}</h3>
+          <p>${task.description}</p>
+          <p>Priority: ${task.priority}</p>
+          <p>Status: ${task.status}</p>
+          <p>Due Date: ${task.dueDate || 'N/A'}</p>
+          <button onclick="deleteTask('${task._id}')">Delete</button>
+      </div>
+  `
+      )
+      .join('');
 }
 
-function renderPosts(posts) {
-  const postsContainer = document.getElementById("posts");
-  postsContainer.innerHTML = "";
+async function deleteTask(taskId) {
+  try {
+      const response = await fetch(`${API_BASE_URL}/${taskId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
+      });
+      if (!response.ok) throw new Error('Failed to delete task');
 
-  posts.forEach((post) => {
-    const postDiv = document.createElement("div");
-    postDiv.className = "post";
-    postDiv.innerHTML = `
-            <h3>${post.title}</h3>
-            <p>${post.content}</p>
-            <p><small>Posted by: ${post.author}</small></p>
-        `;
-    postsContainer.appendChild(postDiv);
-  });
+      alert('Task deleted successfully');
+      fetchAndRenderTasks(); // Re-fetch tasks after deletion
+  } catch (error) {
+      console.error(error.message);
+  }
+}
+async function addTask() {
+  const newTask = {
+      title: `New Task ${Date.now()}`,
+      description: 'Description for the new task',
+      priority: 'Medium',
+      status: 'Pending',
+      dueDate: new Date(),
+  };
+
+  try {
+      const response = await fetch(API_BASE_URL +"/client", {
+          method: 'POST',
+          headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+          body: JSON.stringify(newTask),
+      });
+      if (!response.ok) throw new Error('Failed to add task');
+
+      alert('Task added successfully');
+      fetchAndRenderTasks(); 
+  } catch (error) {
+      console.error(error.message);
+  }
 }
 
-
-function showLoader() {
-  const loader = document.querySelector(".loader");
-  loader.style.display = "block";
-}
-
-function hideLoader() {
-  const loader = document.querySelector(".loader");
-  loader.style.display = "none";
-}
 
 // event listeners
 document.getElementById("show-register").addEventListener("click", (e) => {
@@ -140,7 +153,6 @@ document.getElementById("login-form").addEventListener("submit", async (e) => {
     }
   } catch (error) {
     console.error("Error logging in:", error);
-    alert("An error occurred. Please try again.");
   }
 });
 
@@ -198,3 +210,68 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   }
 });
+
+// document.getElementById('add-task-btn').addEventListener('click', addTask);
+
+
+document.addEventListener("DOMContentLoaded", () => {
+  const tasksContainer = document.getElementById("tasks");
+  const showTaskFormBtn = document.getElementById("show-task-form-btn");
+  const taskForm = document.getElementById("task-form");
+  const addTaskForm = document.getElementById("add-task-form");
+
+  // Show the task form
+  showTaskFormBtn.addEventListener("click", () => {
+    taskForm.style.display = taskForm.style.display === "none" ? "block" : "none";
+  });
+
+  // Add a new task
+  addTaskForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const title = document.getElementById("title").value;
+    const description = document.getElementById("description").value;
+    const priority = document.getElementById("priority").value;
+    const status = document.getElementById("status").value;
+    const dueDate = document.getElementById("dueDate").value;
+
+    const task = {
+      id: Date.now(),
+      title,
+      description,
+      priority,
+      status,
+      dueDate,
+    };
+
+    addTaskToDOM(task);
+    addTaskForm.reset();
+    taskForm.style.display = "none";
+  });
+
+  // Function to add a task to the DOM
+  function addTaskToDOM(task) {
+    const taskCard = document.createElement("div");
+    taskCard.className = "task";
+    taskCard.dataset.id = task.id;
+    taskCard.innerHTML = `
+      <h3>${task.title}</h3>
+      <p><strong>Description:</strong> ${task.description}</p>
+      <p><strong>Priority:</strong> ${task.priority}</p>
+      <p><strong>Status:</strong> ${task.status}</p>
+      <p><strong>Due Date:</strong> ${task.dueDate || "N/A"}</p>
+      <button class="btn btn-delete">Delete Task</button>
+    `;
+
+    const deleteButton = taskCard.querySelector(".btn-delete");
+    deleteButton.addEventListener("click", () => deleteTask(taskCard));
+
+    tasksContainer.appendChild(taskCard);
+  }
+  function deleteTask(taskElement) {
+    tasksContainer.removeChild(taskElement);
+  }
+});
+
+
+fetchAndRenderTasks();
